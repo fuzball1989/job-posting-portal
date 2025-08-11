@@ -1,0 +1,1 @@
+[build]\nbuilder = \"NIXPACKS\"\nbuildCommand = \"npm install && npm run build\"\nwatchPatterns = [\"src/**\"]\n\n[deploy]\nstartCommand = \"npm start\"\nrestartPolicyType = \"ON_FAILURE\"\nrestartPolicyMaxRetries = 10\n\n[env]\nNODE_ENV = \"production\"\nPORT = \"3001\"\n\n[experimental]\nfixedServiceId = true

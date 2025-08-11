@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:15-alpine
+    container_name: jobportal-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jobportal_dev
+      POSTGRES_USER: jobportal_user
+      POSTGRES_PASSWORD: jobportal_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - jobportal-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: jobportal-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - jobportal-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: jobportal-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://jobportal_user:jobportal_password@database:5432/jobportal_dev
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      CLOUDINARY_CLOUD_NAME: your-cloudinary-cloud-name
+      CLOUDINARY_API_KEY: your-cloudinary-api-key
+      CLOUDINARY_API_SECRET: your-cloudinary-api-secret
+      EMAIL_FROM: noreply@jobportal.com
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USER: your-gmail-username
+      SMTP_PASS: your-gmail-app-password
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./shared:/shared
+    depends_on:
+      - database
+      - redis
+    networks:
+      - jobportal-network
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: jobportal-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:3001/api
+      VITE_APP_NAME: Job Portal
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - ./shared:/shared
+    depends_on:
+      - backend
+    networks:
+      - jobportal-network
+
+  # Nginx Reverse Proxy (for production-like setup)
+  nginx:
+    image: nginx:alpine
+    container_name: jobportal-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./infrastructure/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - jobportal-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  jobportal-network:
+    driver: bridge

@@ -1,0 +1,349 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  passwordHash      String    @map("password_hash")
+  firstName         String    @map("first_name")
+  lastName          String    @map("last_name")
+  phone             String?
+  profilePictureUrl String?   @map("profile_picture_url")
+  role              UserRole  @default(JOB_SEEKER)
+  isEmailVerified   Boolean   @default(false) @map("is_email_verified")
+  isActive          Boolean   @default(true) @map("is_active")
+  lastLoginAt       DateTime? @map("last_login_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  profile                 UserProfile?
+  companyMemberships      CompanyMember[]
+  postedJobs              Job[]                       @relation("JobPostedBy")
+  applications            JobApplication[]
+  savedJobs               SavedJob[]
+  jobAlerts               JobAlert[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  statusChanges           ApplicationStatusHistory[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  id                   String           @id @default(uuid())
+  userId               String           @unique @map("user_id")
+  title                String?
+  summary              String?
+  experienceYears      Int?             @map("experience_years")
+  skills               String[]
+  location             String?
+  salaryExpectationMin Int?             @map("salary_expectation_min")
+  salaryExpectationMax Int?             @map("salary_expectation_max")
+  currency             String           @default("USD")
+  resumeUrl            String?          @map("resume_url")
+  portfolioUrl         String?          @map("portfolio_url")
+  linkedinUrl          String?          @map("linkedin_url")
+  githubUrl            String?          @map("github_url")
+  websiteUrl           String?          @map("website_url")
+  availability         UserAvailability @default(AVAILABLE)
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model Company {
+  id              String        @id @default(uuid())
+  name            String
+  slug            String        @unique
+  description     String?
+  industry        String?
+  size            CompanySize?
+  foundedYear     Int?          @map("founded_year")
+  location        String?
+  websiteUrl      String?       @map("website_url")
+  logoUrl         String?       @map("logo_url")
+  coverImageUrl   String?       @map("cover_image_url")
+  linkedinUrl     String?       @map("linkedin_url")
+  twitterUrl      String?       @map("twitter_url")
+  cultureTags     String[]      @map("culture_tags")
+  benefits        String[]
+  isVerified      Boolean       @default(false) @map("is_verified")
+  isActive        Boolean       @default(true) @map("is_active")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  members CompanyMember[]
+  jobs    Job[]
+
+  @@map("companies")
+}
+
+model CompanyMember {
+  id        String            @id @default(uuid())
+  companyId String            @map("company_id")
+  userId    String            @map("user_id")
+  role      CompanyMemberRole @default(MEMBER)
+  title     String?
+  isActive  Boolean           @default(true) @map("is_active")
+  joinedAt  DateTime          @default(now()) @map("joined_at")
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+  @@map("company_members")
+}
+
+model JobCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  icon        String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  jobs Job[]
+
+  @@map("job_categories")
+}
+
+model Job {
+  id                  String          @id @default(uuid())
+  companyId           String          @map("company_id")
+  postedBy            String          @map("posted_by")
+  categoryId          String?         @map("category_id")
+  title               String
+  slug                String
+  description         String
+  requirements        String?
+  responsibilities    String?
+  benefits            String?
+  location            String?
+  remoteType          RemoteType      @default(OFFICE) @map("remote_type")
+  employmentType      EmploymentType  @map("employment_type")
+  experienceLevel     ExperienceLevel? @map("experience_level")
+  salaryMin           Int?            @map("salary_min")
+  salaryMax           Int?            @map("salary_max")
+  currency            String          @default("USD")
+  salaryType          SalaryType      @default(YEARLY) @map("salary_type")
+  skillsRequired      String[]        @map("skills_required")
+  niceToHaveSkills    String[]        @map("nice_to_have_skills")
+  applicationDeadline DateTime?       @map("application_deadline")
+  status              JobStatus       @default(ACTIVE)
+  viewsCount          Int             @default(0) @map("views_count")
+  applicationsCount   Int             @default(0) @map("applications_count")
+  isFeatured          Boolean         @default(false) @map("is_featured")
+  isUrgent            Boolean         @default(false) @map("is_urgent")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  company      Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  postedByUser User                       @relation("JobPostedBy", fields: [postedBy], references: [id])
+  category     JobCategory?               @relation(fields: [categoryId], references: [id])
+  applications JobApplication[]
+  savedBy      SavedJob[]
+
+  @@unique([companyId, slug])
+  @@map("jobs")
+}
+
+model JobApplication {
+  id               String            @id @default(uuid())
+  jobId            String            @map("job_id")
+  userId           String            @map("user_id")
+  coverLetter      String?           @map("cover_letter")
+  resumeUrl        String?           @map("resume_url")
+  portfolioUrl     String?           @map("portfolio_url")
+  expectedSalary   Int?              @map("expected_salary")
+  currency         String            @default("USD")
+  availabilityDate DateTime?         @map("availability_date")
+  status           ApplicationStatus @default(SUBMITTED)
+  notes            String?
+  appliedAt        DateTime          @default(now()) @map("applied_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  job           Job                        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user          User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  statusHistory ApplicationStatusHistory[]
+
+  @@unique([jobId, userId])
+  @@map("job_applications")
+}
+
+model ApplicationStatusHistory {
+  id            String            @id @default(uuid())
+  applicationId String            @map("application_id")
+  status        ApplicationStatus
+  notes         String?
+  changedBy     String?           @map("changed_by")
+  changedAt     DateTime          @default(now()) @map("changed_at")
+
+  // Relations
+  application   JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  changedByUser User?          @relation(fields: [changedBy], references: [id])
+
+  @@map("application_status_history")
+}
+
+model SavedJob {
+  id      String   @id @default(uuid())
+  userId  String   @map("user_id")
+  jobId   String   @map("job_id")
+  savedAt DateTime @default(now()) @map("saved_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@map("saved_jobs")
+}
+
+model JobAlert {
+  id              String            @id @default(uuid())
+  userId          String            @map("user_id")
+  name            String
+  keywords        String[]
+  location        String?
+  remoteType      RemoteType?       @map("remote_type")
+  employmentType  EmploymentType[]  @map("employment_type")
+  experienceLevel ExperienceLevel[] @map("experience_level")
+  salaryMin       Int?              @map("salary_min")
+  salaryMax       Int?              @map("salary_max")
+  currency        String            @default("USD")
+  frequency       AlertFrequency    @default(DAILY)
+  isActive        Boolean           @default(true) @map("is_active")
+  lastSentAt      DateTime?         @map("last_sent_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("job_alerts")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+// Enums
+enum UserRole {
+  JOB_SEEKER @map("job_seeker")
+  EMPLOYER   @map("employer")
+  ADMIN      @map("admin")
+}
+
+enum UserAvailability {
+  AVAILABLE       @map("available")
+  NOT_AVAILABLE   @map("not_available")
+  OPEN_TO_OFFERS  @map("open_to_offers")
+}
+
+enum CompanySize {
+  STARTUP     @map("startup")
+  SMALL       @map("small")
+  MEDIUM      @map("medium")
+  LARGE       @map("large")
+  ENTERPRISE  @map("enterprise")
+}
+
+enum CompanyMemberRole {
+  ADMIN     @map("admin")
+  RECRUITER @map("recruiter")
+  MEMBER    @map("member")
+}
+
+enum RemoteType {
+  OFFICE  @map("office")
+  REMOTE  @map("remote")
+  HYBRID  @map("hybrid")
+}
+
+enum EmploymentType {
+  FULL_TIME   @map("full_time")
+  PART_TIME   @map("part_time")
+  CONTRACT    @map("contract")
+  INTERNSHIP  @map("internship")
+}
+
+enum ExperienceLevel {
+  ENTRY     @map("entry")
+  MID       @map("mid")
+  SENIOR    @map("senior")
+  LEAD      @map("lead")
+  EXECUTIVE @map("executive")
+}
+
+enum JobStatus {
+  DRAFT   @map("draft")
+  ACTIVE  @map("active")
+  PAUSED  @map("paused")
+  CLOSED  @map("closed")
+  FILLED  @map("filled")
+}
+
+enum SalaryType {
+  YEARLY  @map("yearly")
+  MONTHLY @map("monthly")
+  WEEKLY  @map("weekly")
+  HOURLY  @map("hourly")
+}
+
+enum ApplicationStatus {
+  SUBMITTED    @map("submitted")
+  REVIEWING    @map("reviewing")
+  SHORTLISTED  @map("shortlisted")
+  INTERVIEWED  @map("interviewed")
+  OFFERED      @map("offered")
+  REJECTED     @map("rejected")
+  WITHDRAWN    @map("withdrawn")
+}
+
+enum AlertFrequency {
+  DAILY   @map("daily")
+  WEEKLY  @map("weekly")
+}
