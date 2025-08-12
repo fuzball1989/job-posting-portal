@@ -24,14 +24,12 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: false,
+    minify: false,
+    cssMinify: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['@headlessui/react', '@heroicons/react', 'framer-motion'],
-          forms: ['react-hook-form', '@hookform/resolvers', 'zod'],
-        },
+        manualChunks: undefined,
       },
     },
   },

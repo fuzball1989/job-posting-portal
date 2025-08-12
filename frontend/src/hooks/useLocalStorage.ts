@@ -1,1 +1,135 @@
-import { useState, useEffect, useCallback } from 'react';\n\ntype SetValue<T> = T | ((val: T) => T);\n\n/**\n * Custom hook for localStorage with automatic JSON serialization\n */\nexport function useLocalStorage<T>(\n  key: string,\n  initialValue: T\n): [T, (value: SetValue<T>) => void, () => void] {\n  // Get from local storage then parse stored json or return initialValue\n  const [storedValue, setStoredValue] = useState<T>(() => {\n    try {\n      const item = window.localStorage.getItem(key);\n      return item ? JSON.parse(item) : initialValue;\n    } catch (error) {\n      console.error(`Error reading localStorage key \"${key}\":`, error);\n      return initialValue;\n    }\n  });\n\n  // Return a wrapped version of useState's setter function that persists the new value to localStorage\n  const setValue = useCallback(\n    (value: SetValue<T>) => {\n      try {\n        // Allow value to be a function so we have the same API as useState\n        const valueToStore = value instanceof Function ? value(storedValue) : value;\n        \n        // Save state\n        setStoredValue(valueToStore);\n        \n        // Save to local storage\n        window.localStorage.setItem(key, JSON.stringify(valueToStore));\n      } catch (error) {\n        console.error(`Error setting localStorage key \"${key}\":`, error);\n      }\n    },\n    [key, storedValue]\n  );\n\n  // Remove from localStorage\n  const removeValue = useCallback(() => {\n    try {\n      window.localStorage.removeItem(key);\n      setStoredValue(initialValue);\n    } catch (error) {\n      console.error(`Error removing localStorage key \"${key}\":`, error);\n    }\n  }, [key, initialValue]);\n\n  // Listen for changes to the localStorage key from other tabs/windows\n  useEffect(() => {\n    const handleStorageChange = (e: StorageEvent) => {\n      if (e.key === key && e.newValue !== null) {\n        try {\n          setStoredValue(JSON.parse(e.newValue));\n        } catch (error) {\n          console.error(`Error parsing localStorage key \"${key}\":`, error);\n        }\n      }\n    };\n\n    window.addEventListener('storage', handleStorageChange);\n    return () => window.removeEventListener('storage', handleStorageChange);\n  }, [key]);\n\n  return [storedValue, setValue, removeValue];\n}\n\n/**\n * Hook for managing user preferences in localStorage\n */\nexport function useUserPreferences() {\n  const [preferences, setPreferences, removePreferences] = useLocalStorage('userPreferences', {\n    theme: 'light' as 'light' | 'dark',\n    language: 'en',\n    emailNotifications: true,\n    jobAlerts: true,\n    searchFilters: {} as Record<string, any>,\n  });\n\n  const updatePreference = useCallback(\n    <K extends keyof typeof preferences>(key: K, value: typeof preferences[K]) => {\n      setPreferences(prev => ({ ...prev, [key]: value }));\n    },\n    [setPreferences]\n  );\n\n  return {\n    preferences,\n    updatePreference,\n    resetPreferences: removePreferences,\n  };\n}\n\n/**\n * Hook for managing recent searches\n */\nexport function useRecentSearches(maxItems: number = 5) {\n  const [recentSearches, setRecentSearches] = useLocalStorage<string[]>('recentSearches', []);\n\n  const addSearch = useCallback(\n    (searchTerm: string) => {\n      if (!searchTerm.trim()) return;\n      \n      setRecentSearches(prev => {\n        const filtered = prev.filter(term => term !== searchTerm);\n        const updated = [searchTerm, ...filtered];\n        return updated.slice(0, maxItems);\n      });\n    },\n    [setRecentSearches, maxItems]\n  );\n\n  const removeSearch = useCallback(\n    (searchTerm: string) => {\n      setRecentSearches(prev => prev.filter(term => term !== searchTerm));\n    },\n    [setRecentSearches]\n  );\n\n  const clearSearches = useCallback(() => {\n    setRecentSearches([]);\n  }, [setRecentSearches]);\n\n  return {\n    recentSearches,\n    addSearch,\n    removeSearch,\n    clearSearches,\n  };\n}\n\nexport default useLocalStorage;
+import { useState, useEffect, useCallback } from 'react';
+
+type SetValue<T> = T | ((val: T) => T);
+
+/**
+ * Custom hook for localStorage with automatic JSON serialization
+ */
+export function useLocalStorage<T>(
+  key: string,
+  initialValue: T
+): [T, (value: SetValue<T>) => void, () => void] {
+  // Get from local storage then parse stored json or return initialValue
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(`Error reading localStorage key "${key}":`, error);
+      return initialValue;
+    }
+  });
+
+  // Return a wrapped version of useState's setter function that persists the new value to localStorage
+  const setValue = useCallback(
+    (value: SetValue<T>) => {
+      try {
+        // Allow value to be a function so we have the same API as useState
+        const valueToStore = value instanceof Function ? value(storedValue) : value;
+        
+        // Save state
+        setStoredValue(valueToStore);
+        
+        // Save to local storage
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+      } catch (error) {
+        console.error(`Error setting localStorage key "${key}":`, error);
+      }
+    },
+    [key, storedValue]
+  );
+
+  // Remove from localStorage
+  const removeValue = useCallback(() => {
+    try {
+      window.localStorage.removeItem(key);
+      setStoredValue(initialValue);
+    } catch (error) {
+      console.error(`Error removing localStorage key "${key}":`, error);
+    }
+  }, [key, initialValue]);
+
+  // Listen for changes to the localStorage key from other tabs/windows
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === key && e.newValue !== null) {
+        try {
+          setStoredValue(JSON.parse(e.newValue));
+        } catch (error) {
+          console.error(`Error parsing localStorage key "${key}":`, error);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [key]);
+
+  return [storedValue, setValue, removeValue];
+}
+
+/**
+ * Hook for managing user preferences in localStorage
+ */
+export function useUserPreferences() {
+  const [preferences, setPreferences, removePreferences] = useLocalStorage('userPreferences', {
+    theme: 'light' as 'light' | 'dark',
+    language: 'en',
+    emailNotifications: true,
+    jobAlerts: true,
+    searchFilters: {} as Record<string, any>,
+  });
+
+  const updatePreference = useCallback(
+    <K extends keyof typeof preferences>(key: K, value: typeof preferences[K]) => {
+      setPreferences(prev => ({ ...prev, [key]: value }));
+    },
+    [setPreferences]
+  );
+
+  return {
+    preferences,
+    updatePreference,
+    resetPreferences: removePreferences,
+  };
+}
+
+/**
+ * Hook for managing recent searches
+ */
+export function useRecentSearches(maxItems: number = 5) {
+  const [recentSearches, setRecentSearches] = useLocalStorage<string[]>('recentSearches', []);
+
+  const addSearch = useCallback(
+    (searchTerm: string) => {
+      if (!searchTerm.trim()) return;
+      
+      setRecentSearches(prev => {
+        const filtered = prev.filter(term => term !== searchTerm);
+        const updated = [searchTerm, ...filtered];
+        return updated.slice(0, maxItems);
+      });
+    },
+    [setRecentSearches, maxItems]
+  );
+
+  const removeSearch = useCallback(
+    (searchTerm: string) => {
+      setRecentSearches(prev => prev.filter(term => term !== searchTerm));
+    },
+    [setRecentSearches]
+  );
+
+  const clearSearches = useCallback(() => {
+    setRecentSearches([]);
+  }, [setRecentSearches]);
+
+  return {
+    recentSearches,
+    addSearch,
+    removeSearch,
+    clearSearches,
+  };
+}
+
+export default useLocalStorage;

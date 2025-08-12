@@ -1,1 +1,255 @@
-import { useState, useCallback, useEffect } from 'react';\nimport { z } from 'zod';\n\ntype FieldErrors<T> = {\n  [K in keyof T]?: string;\n};\n\ninterface UseFormOptions<T> {\n  initialValues: T;\n  validationSchema?: z.ZodSchema<T>;\n  onSubmit?: (values: T) => Promise<void> | void;\n  validateOnChange?: boolean;\n  validateOnBlur?: boolean;\n}\n\ninterface UseFormReturn<T> {\n  values: T;\n  errors: FieldErrors<T>;\n  touched: { [K in keyof T]?: boolean };\n  isSubmitting: boolean;\n  isValid: boolean;\n  isDirty: boolean;\n  setFieldValue: <K extends keyof T>(field: K, value: T[K]) => void;\n  setFieldError: <K extends keyof T>(field: K, error: string) => void;\n  setFieldTouched: <K extends keyof T>(field: K, touched?: boolean) => void;\n  handleChange: (field: keyof T) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;\n  handleBlur: (field: keyof T) => (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;\n  handleSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;\n  resetForm: (newValues?: Partial<T>) => void;\n  validateField: <K extends keyof T>(field: K) => Promise<string | undefined>;\n  validateForm: () => Promise<FieldErrors<T>>;\n}\n\n/**\n * Custom hook for form state management with validation\n */\nexport function useForm<T extends Record<string, any>>(\n  options: UseFormOptions<T>\n): UseFormReturn<T> {\n  const {\n    initialValues,\n    validationSchema,\n    onSubmit,\n    validateOnChange = false,\n    validateOnBlur = true,\n  } = options;\n\n  const [values, setValues] = useState<T>(initialValues);\n  const [errors, setErrors] = useState<FieldErrors<T>>({});\n  const [touched, setTouched] = useState<{ [K in keyof T]?: boolean }>({});\n  const [isSubmitting, setIsSubmitting] = useState(false);\n  const [initialFormValues] = useState<T>(initialValues);\n\n  // Compute derived state\n  const isValid = Object.keys(errors).length === 0;\n  const isDirty = JSON.stringify(values) !== JSON.stringify(initialFormValues);\n\n  // Validate a single field\n  const validateField = useCallback(\n    async <K extends keyof T>(field: K): Promise<string | undefined> => {\n      if (!validationSchema) return undefined;\n\n      try {\n        // Create a partial schema for just this field\n        const fieldSchema = validationSchema.pick({ [field]: true } as any);\n        await fieldSchema.parseAsync({ [field]: values[field] });\n        return undefined;\n      } catch (error) {\n        if (error instanceof z.ZodError) {\n          const fieldError = error.errors.find(err => err.path.includes(field as string));\n          return fieldError?.message;\n        }\n        return 'Validation error';\n      }\n    },\n    [validationSchema, values]\n  );\n\n  // Validate the entire form\n  const validateForm = useCallback(async (): Promise<FieldErrors<T>> => {\n    if (!validationSchema) return {};\n\n    try {\n      await validationSchema.parseAsync(values);\n      return {};\n    } catch (error) {\n      if (error instanceof z.ZodError) {\n        const formErrors: FieldErrors<T> = {};\n        error.errors.forEach(err => {\n          const field = err.path[0] as keyof T;\n          if (field && !formErrors[field]) {\n            formErrors[field] = err.message;\n          }\n        });\n        return formErrors;\n      }\n      return {};\n    }\n  }, [validationSchema, values]);\n\n  // Set field value\n  const setFieldValue = useCallback(\n    <K extends keyof T>(field: K, value: T[K]) => {\n      setValues(prev => ({ ...prev, [field]: value }));\n      \n      if (validateOnChange) {\n        validateField(field).then(error => {\n          setErrors(prev => ({\n            ...prev,\n            [field]: error,\n          }));\n        });\n      }\n    },\n    [validateOnChange, validateField]\n  );\n\n  // Set field error\n  const setFieldError = useCallback(\n    <K extends keyof T>(field: K, error: string) => {\n      setErrors(prev => ({ ...prev, [field]: error }));\n    },\n    []\n  );\n\n  // Set field touched\n  const setFieldTouched = useCallback(\n    <K extends keyof T>(field: K, isTouched: boolean = true) => {\n      setTouched(prev => ({ ...prev, [field]: isTouched }));\n    },\n    []\n  );\n\n  // Handle input change\n  const handleChange = useCallback(\n    (field: keyof T) => (\n      event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>\n    ) => {\n      const { type, value } = event.target;\n      let fieldValue: any = value;\n\n      // Handle different input types\n      if (type === 'checkbox') {\n        fieldValue = (event.target as HTMLInputElement).checked;\n      } else if (type === 'number') {\n        fieldValue = value ? parseFloat(value) : undefined;\n      }\n\n      setFieldValue(field, fieldValue);\n    },\n    [setFieldValue]\n  );\n\n  // Handle input blur\n  const handleBlur = useCallback(\n    (field: keyof T) => (\n      event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>\n    ) => {\n      setFieldTouched(field, true);\n      \n      if (validateOnBlur) {\n        validateField(field).then(error => {\n          setErrors(prev => ({\n            ...prev,\n            [field]: error,\n          }));\n        });\n      }\n    },\n    [validateOnBlur, validateField, setFieldTouched]\n  );\n\n  // Handle form submission\n  const handleSubmit = useCallback(\n    async (event: React.FormEvent<HTMLFormElement>) => {\n      event.preventDefault();\n      setIsSubmitting(true);\n\n      try {\n        // Validate form\n        const formErrors = await validateForm();\n        setErrors(formErrors);\n\n        // Mark all fields as touched\n        const allTouched = Object.keys(values).reduce(\n          (acc, key) => ({ ...acc, [key]: true }),\n          {}\n        );\n        setTouched(allTouched);\n\n        // Submit if no errors\n        if (Object.keys(formErrors).length === 0 && onSubmit) {\n          await onSubmit(values);\n        }\n      } finally {\n        setIsSubmitting(false);\n      }\n    },\n    [values, validateForm, onSubmit]\n  );\n\n  // Reset form\n  const resetForm = useCallback(\n    (newValues?: Partial<T>) => {\n      const resetValues = newValues ? { ...initialValues, ...newValues } : initialValues;\n      setValues(resetValues);\n      setErrors({});\n      setTouched({});\n      setIsSubmitting(false);\n    },\n    [initialValues]\n  );\n\n  // Update values when initialValues change\n  useEffect(() => {\n    setValues(initialValues);\n  }, [initialValues]);\n\n  return {\n    values,\n    errors,\n    touched,\n    isSubmitting,\n    isValid,\n    isDirty,\n    setFieldValue,\n    setFieldError,\n    setFieldTouched,\n    handleChange,\n    handleBlur,\n    handleSubmit,\n    resetForm,\n    validateField,\n    validateForm,\n  };\n}\n\n/**\n * Helper hook for getting field props\n */\nexport function useFormField<T>(\n  form: UseFormReturn<T>,\n  field: keyof T\n) {\n  const { values, errors, touched, handleChange, handleBlur } = form;\n  \n  return {\n    name: field as string,\n    value: values[field],\n    error: touched[field] ? errors[field] : undefined,\n    onChange: handleChange(field),\n    onBlur: handleBlur(field),\n  };\n}\n\nexport default useForm;
+import { useState, useCallback, useEffect } from 'react';
+import { z } from 'zod';
+
+type FieldErrors<T> = {
+  [K in keyof T]?: string;
+};
+
+interface UseFormOptions<T> {
+  initialValues: T;
+  validationSchema?: z.ZodSchema<T>;
+  onSubmit?: (values: T) => Promise<void> | void;
+  validateOnChange?: boolean;
+  validateOnBlur?: boolean;
+}
+
+interface UseFormReturn<T> {
+  values: T;
+  errors: FieldErrors<T>;
+  touched: { [K in keyof T]?: boolean };
+  isSubmitting: boolean;
+  isValid: boolean;
+  isDirty: boolean;
+  setFieldValue: <K extends keyof T>(field: K, value: T[K]) => void;
+  setFieldError: <K extends keyof T>(field: K, error: string) => void;
+  setFieldTouched: <K extends keyof T>(field: K, touched?: boolean) => void;
+  handleChange: (field: keyof T) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
+  handleBlur: (field: keyof T) => (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
+  handleSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
+  resetForm: (newValues?: Partial<T>) => void;
+  validateField: <K extends keyof T>(field: K) => Promise<string | undefined>;
+  validateForm: () => Promise<FieldErrors<T>>;
+}
+
+/**
+ * Custom hook for form state management with validation
+ */
+export function useForm<T extends Record<string, any>>(
+  options: UseFormOptions<T>
+): UseFormReturn<T> {
+  const {
+    initialValues,
+    validationSchema,
+    onSubmit,
+    validateOnChange = false,
+    validateOnBlur = true,
+  } = options;
+
+  const [values, setValues] = useState<T>(initialValues);
+  const [errors, setErrors] = useState<FieldErrors<T>>({});
+  const [touched, setTouched] = useState<{ [K in keyof T]?: boolean }>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [initialFormValues] = useState<T>(initialValues);
+
+  // Compute derived state
+  const isValid = Object.keys(errors).length === 0;
+  const isDirty = JSON.stringify(values) !== JSON.stringify(initialFormValues);
+
+  // Validate a single field
+  const validateField = useCallback(
+    async <K extends keyof T>(field: K): Promise<string | undefined> => {
+      if (!validationSchema) return undefined;
+
+      try {
+        // Validate just this field value
+        await validationSchema.parseAsync({ ...values, [field]: values[field] });
+        return undefined;
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          const fieldError = error.errors.find(err => err.path.includes(field as string));
+          return fieldError?.message;
+        }
+        return 'Validation error';
+      }
+    },
+    [validationSchema, values]
+  );
+
+  // Validate the entire form
+  const validateForm = useCallback(async (): Promise<FieldErrors<T>> => {
+    if (!validationSchema) return {};
+
+    try {
+      await validationSchema.parseAsync(values);
+      return {};
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const formErrors: FieldErrors<T> = {};
+        error.errors.forEach(err => {
+          const field = err.path[0] as keyof T;
+          if (field && !formErrors[field]) {
+            formErrors[field] = err.message;
+          }
+        });
+        return formErrors;
+      }
+      return {};
+    }
+  }, [validationSchema, values]);
+
+  // Set field value
+  const setFieldValue = useCallback(
+    <K extends keyof T>(field: K, value: T[K]) => {
+      setValues(prev => ({ ...prev, [field]: value }));
+      
+      if (validateOnChange) {
+        validateField(field).then(error => {
+          setErrors(prev => ({
+            ...prev,
+            [field]: error,
+          }));
+        });
+      }
+    },
+    [validateOnChange, validateField]
+  );
+
+  // Set field error
+  const setFieldError = useCallback(
+    <K extends keyof T>(field: K, error: string) => {
+      setErrors(prev => ({ ...prev, [field]: error }));
+    },
+    []
+  );
+
+  // Set field touched
+  const setFieldTouched = useCallback(
+    <K extends keyof T>(field: K, isTouched: boolean = true) => {
+      setTouched(prev => ({ ...prev, [field]: isTouched }));
+    },
+    []
+  );
+
+  // Handle input change
+  const handleChange = useCallback(
+    (field: keyof T) => (
+      event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    ) => {
+      const { type, value } = event.target;
+      let fieldValue: any = value;
+
+      // Handle different input types
+      if (type === 'checkbox') {
+        fieldValue = (event.target as HTMLInputElement).checked;
+      } else if (type === 'number') {
+        fieldValue = value ? parseFloat(value) : undefined;
+      }
+
+      setFieldValue(field, fieldValue);
+    },
+    [setFieldValue]
+  );
+
+  // Handle input blur
+  const handleBlur = useCallback(
+    (field: keyof T) => (
+      _event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    ) => {
+      setFieldTouched(field, true);
+      
+      if (validateOnBlur) {
+        validateField(field).then(error => {
+          setErrors(prev => ({
+            ...prev,
+            [field]: error,
+          }));
+        });
+      }
+    },
+    [validateOnBlur, validateField, setFieldTouched]
+  );
+
+  // Handle form submission
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setIsSubmitting(true);
+
+      try {
+        // Validate form
+        const formErrors = await validateForm();
+        setErrors(formErrors);
+
+        // Mark all fields as touched
+        const allTouched = Object.keys(values).reduce(
+          (acc, key) => ({ ...acc, [key]: true }),
+          {}
+        );
+        setTouched(allTouched);
+
+        // Submit if no errors
+        if (Object.keys(formErrors).length === 0 && onSubmit) {
+          await onSubmit(values);
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [values, validateForm, onSubmit]
+  );
+
+  // Reset form
+  const resetForm = useCallback(
+    (newValues?: Partial<T>) => {
+      const resetValues = newValues ? { ...initialValues, ...newValues } : initialValues;
+      setValues(resetValues);
+      setErrors({});
+      setTouched({});
+      setIsSubmitting(false);
+    },
+    [initialValues]
+  );
+
+  // Update values when initialValues change
+  useEffect(() => {
+    setValues(initialValues);
+  }, [initialValues]);
+
+  return {
+    values,
+    errors,
+    touched,
+    isSubmitting,
+    isValid,
+    isDirty,
+    setFieldValue,
+    setFieldError,
+    setFieldTouched,
+    handleChange,
+    handleBlur,
+    handleSubmit,
+    resetForm,
+    validateField,
+    validateForm,
+  };
+}
+
+/**
+ * Helper hook for getting field props
+ */
+export function useFormField<T>(
+  form: UseFormReturn<T>,
+  field: keyof T
+) {
+  const { values, errors, touched, handleChange, handleBlur } = form;
+  
+  return {
+    name: field as string,
+    value: values[field],
+    error: touched[field] ? errors[field] : undefined,
+    onChange: handleChange(field),
+    onBlur: handleBlur(field),
+  };
+}
+
+export default useForm;

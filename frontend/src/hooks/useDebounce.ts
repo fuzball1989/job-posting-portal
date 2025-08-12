@@ -1,1 +1,56 @@
-import { useState, useEffect } from 'react';\n\n/**\n * Custom hook that debounces a value\n * Useful for search inputs to avoid making API calls on every keystroke\n */\nexport function useDebounce<T>(value: T, delay: number): T {\n  const [debouncedValue, setDebouncedValue] = useState<T>(value);\n\n  useEffect(() => {\n    const handler = setTimeout(() => {\n      setDebouncedValue(value);\n    }, delay);\n\n    return () => {\n      clearTimeout(handler);\n    };\n  }, [value, delay]);\n\n  return debouncedValue;\n}\n\n/**\n * Hook that debounces a callback function\n */\nexport function useDebouncedCallback<T extends (...args: any[]) => any>(\n  callback: T,\n  delay: number\n): T {\n  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);\n\n  const debouncedCallback = ((...args: Parameters<T>) => {\n    if (debounceTimer) {\n      clearTimeout(debounceTimer);\n    }\n\n    const timer = setTimeout(() => {\n      callback(...args);\n    }, delay);\n\n    setDebounceTimer(timer);\n  }) as T;\n\n  // Cleanup on unmount\n  useEffect(() => {\n    return () => {\n      if (debounceTimer) {\n        clearTimeout(debounceTimer);\n      }\n    };\n  }, [debounceTimer]);\n\n  return debouncedCallback;\n}\n\nexport default useDebounce;
+import { useState, useEffect } from 'react';
+
+/**
+ * Custom hook that debounces a value
+ * Useful for search inputs to avoid making API calls on every keystroke
+ */
+export function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+/**
+ * Hook that debounces a callback function
+ */
+export function useDebouncedCallback<T extends (...args: any[]) => any>(
+  callback: T,
+  delay: number
+): T {
+  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+
+  const debouncedCallback = ((...args: Parameters<T>) => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    const timer = setTimeout(() => {
+      callback(...args);
+    }, delay);
+
+    setDebounceTimer(timer);
+  }) as T;
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+    };
+  }, [debounceTimer]);
+
+  return debouncedCallback;
+}
+
+export default useDebounce;

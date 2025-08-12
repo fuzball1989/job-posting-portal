@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useQuery } from 'react-query';
 import { useSearchParams } from 'react-router-dom';
 import apiService from '../../services/api';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
 import JobCard from '../../components/job/JobCard';
 import JobFilters from '../../components/job/JobFilters';
 import SearchBar from '../../components/common/SearchBar';
@@ -26,7 +25,6 @@ interface JobSearchParams {
 
 const JobsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [showFilters, setShowFilters] = useState(false);
   
   // Parse URL parameters
   const searchParameters: JobSearchParams = useMemo(() => ({
@@ -280,7 +278,7 @@ const JobsPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {jobsData?.jobs.map((job) => (
+                {jobsData?.jobs.map((job: any) => (
                   <JobCard key={job.id} job={job} />
                 ))}
               </div>
