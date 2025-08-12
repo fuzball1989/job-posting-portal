@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import jobService from '../services/job.service';
+import { jobService } from '../services/job';
 import prisma from '../config/database';
 import { AuthenticatedRequest } from '../middleware/auth';
 
@@ -129,6 +129,14 @@ export const searchJobs = async (req: Request, res: Response): Promise<void> => 
 export const getJobById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        error: 'Invalid request',
+        message: 'Job ID is required',
+      });
+      return;
+    }
+
     const job = await jobService.getJobById(id);
 
     if (!job) {
@@ -151,6 +159,14 @@ export const getJobById = async (req: Request, res: Response): Promise<void> => 
 export const updateJob = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        error: 'Invalid request',
+        message: 'Job ID is required',
+      });
+      return;
+    }
+
     const validatedData = updateJobSchema.parse(req.body);
     
     const job = await jobService.updateJob(id, req.user!.id, validatedData);
@@ -196,6 +212,14 @@ export const updateJob = async (req: AuthenticatedRequest, res: Response): Promi
 export const deleteJob = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        error: 'Invalid request',
+        message: 'Job ID is required',
+      });
+      return;
+    }
+
     await jobService.deleteJob(id, req.user!.id);
 
     res.json({
