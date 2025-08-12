@@ -271,27 +271,27 @@ async function seed() {
 
     const jobs = await Promise.all(
       seedJobs.map((jobData, index) => {
-        let categoryId: string | undefined;
+        let categoryId: string | null = null;
         let companyId: string;
         let postedBy: string;
 
         // Assign categories
         if (index === 0) {
-          categoryId = devCategory?.id;
-          companyId = companies[0].id; // TechCorp
-          postedBy = employer!.id;
+          categoryId = devCategory?.id || null;
+          companyId = companies[0]?.id || '';
+          postedBy = employer?.id || '';
         } else if (index === 1) {
-          categoryId = designCategory?.id;
-          companyId = companies[1].id; // StartupXYZ
-          postedBy = users[0].id; // Admin (for demo)
+          categoryId = designCategory?.id || null;
+          companyId = companies[1]?.id || '';
+          postedBy = users[0]?.id || '';
         } else if (index === 2) {
-          categoryId = dataCategory?.id;
-          companyId = companies[0].id; // TechCorp
-          postedBy = employer!.id;
+          categoryId = dataCategory?.id || null;
+          companyId = companies[0]?.id || '';
+          postedBy = employer?.id || '';
         } else {
-          categoryId = devCategory?.id;
-          companyId = companies[2].id; // Global Solutions
-          postedBy = users[0].id; // Admin
+          categoryId = devCategory?.id || null;
+          companyId = companies[2]?.id || '';
+          postedBy = users[0]?.id || '';
         }
 
         const slug = jobData.title

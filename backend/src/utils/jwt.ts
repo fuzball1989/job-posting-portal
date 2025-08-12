@@ -22,18 +22,14 @@ export interface AuthTokens {
 export const generateTokens = (payload: JwtPayload): AuthTokens => {
   const accessToken = jwt.sign(payload, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
-    issuer: 'job-portal',
-    audience: 'job-portal-users',
-  });
+  } as jwt.SignOptions);
 
   const refreshToken = jwt.sign(
     { userId: payload.userId },
     JWT_SECRET,
     {
       expiresIn: JWT_REFRESH_EXPIRES_IN,
-      issuer: 'job-portal',
-      audience: 'job-portal-refresh',
-    }
+    } as jwt.SignOptions
   );
 
   return { accessToken, refreshToken };
