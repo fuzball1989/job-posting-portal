@@ -13,6 +13,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev",
     "build": "concurrently \"npm run build:shared\" \"npm run build:backend\" \"npm run build:frontend\"",
+    "build:fast": "concurrently \"npm run build:shared\" \"npm run build:backend\" \"cd frontend && npm run build:fast\"",
     "build:full": "npm run build:shared && npm run build:backend:full && npm run build:frontend",
     "build:frontend": "cd frontend && npm run build",
     "build:backend": "cd backend && npm run build",

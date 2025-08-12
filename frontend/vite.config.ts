@@ -27,9 +27,12 @@ export default defineConfig({
     sourcemap: false,
     minify: false,
     cssMinify: false,
+    reportCompressedSize: false,
+    chunkSizeWarningLimit: 10000,
     rollupOptions: {
       output: {
         manualChunks: undefined,
+        inlineDynamicImports: true,
       },
     },
   },
